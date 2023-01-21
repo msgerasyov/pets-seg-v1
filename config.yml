@@ -4,7 +4,6 @@ tune:
   batch_size: 8
   limit_train_batches: 0.1
   epochs: 10
-  patience: 3
   log_model: false
   n_workers: 4
 train:
@@ -20,5 +19,5 @@ optuna:
   pruner:
     n_startup_trials: 5
     n_warmup_steps: 3
-  n_trials: 100
+  n_trials: 10
 seed: 2023
