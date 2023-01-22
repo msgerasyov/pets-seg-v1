@@ -11,6 +11,8 @@ from albumentations.pytorch import ToTensorV2
 from sklearn.model_selection import train_test_split
 from torch import optim
 from torch.utils.data import DataLoader, Subset
+from torchmetrics import MetricCollection
+from torchmetrics.classification import BinaryJaccardIndex, Dice
 from torchmetrics.functional import dice, jaccard_index
 from torchvision import datasets
 from torchvision.models import ResNet50_Weights
@@ -25,6 +27,11 @@ class LightningDeepLabV3(pl.LightningModule):
         weights = ResNet50_Weights.IMAGENET1K_V2
         self.model = deeplabv3_resnet50(num_classes=1, weights_backbone=weights)
         self.criterion = nn.BCEWithLogitsLoss()
+        metrics = MetricCollection([
+            BinaryJaccardIndex(), Dice()
+        ])
+        self.val_metrics = metrics.clone(prefix="val_")
+        self.test_metrics = metrics.clone(prefix="test_")
 
     def forward(self, data: torch.Tensor) -> torch.Tensor:
         return self.model(data)
@@ -36,24 +43,24 @@ class LightningDeepLabV3(pl.LightningModule):
         self.log("loss", loss)
         return loss
 
-    def validation_step(self, batch, batch_idx: int) -> Dict[str, Any]:
-        iou, dice_score = self._shared_eval_step(batch, batch_idx)
-        metrics = {"val_iou": iou, "val_dice": dice_score}
-        self.log_dict(metrics)
-        return metrics
-
-    def test_step(self, batch, batch_idx: int) -> Dict[str, Any]:
-        iou, dice_score = self._shared_eval_step(batch, batch_idx)
-        metrics = {"test_iou": iou, "test_dice": dice_score}
-        self.log_dict(metrics)
-        return metrics
-
-    def _shared_eval_step(self, batch, batch_idx):
+    def validation_step(self, batch, batch_idx: int):
         data, target = batch
         output = self(data)["out"].view(target.shape)
-        dice_score = dice(output, target.to(torch.long))
-        iou = jaccard_index(output, target.to(torch.long), task="binary")
-        return iou, dice_score
+        self.val_metrics.update(output, target.to(torch.long))
+
+    def validation_epoch_end(self, outputs):
+        output = self.val_metrics.compute()
+        self.log_dict(output)
+
+    def test_step(self, batch, batch_idx: int):
+        data, target = batch
+        output = self(data)["out"].view(target.shape)
+        self.test_metrics.update(output, target.to(torch.long))
+
+    def test_epoch_end(self, outputs):
+        output = self.test_metrics.compute()
+        self.log_dict(output)
+        return output
 
     def configure_optimizers(self):
         opt = optim.SGD(self.model.parameters(), lr=self.lr, momentum=self.momentum)
@@ -62,7 +69,7 @@ class LightningDeepLabV3(pl.LightningModule):
             "optimizer": opt,
             "lr_scheduler": {
                 "scheduler": scheduler,
-                "monitor": "val_iou"
+                "monitor": "val_BinaryJaccardIndex"
             }
         }
 

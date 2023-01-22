@@ -50,10 +50,10 @@ def objective(trial: optuna.trial.BaseTrial, config: Dict[str, Any]) -> float:
                                              num_workers=config["n_workers"])
         logger = MLFlowLogger(experiment_name=config["mlflow"]["experiment_name"], run_name=run_name)
         logger._run_id = run.info.run_id
-        callbacks = [PyTorchLightningPruningCallback(trial, monitor="val_iou"),
+        callbacks = [PyTorchLightningPruningCallback(trial, monitor="val_BinaryJaccardIndex"),
                      LearningRateMonitor(logging_interval="epoch")]
         if "patience" in config:
-            callbacks.append(EarlyStopping(monitor="val_iou", mode="max", patience=config["patience"]))
+            callbacks.append(EarlyStopping(monitor="val_BinaryJaccardIndex", mode="max", patience=config["patience"]))
         trainer = pl.Trainer(
             logger=logger,
             enable_checkpointing=False,
@@ -68,7 +68,7 @@ def objective(trial: optuna.trial.BaseTrial, config: Dict[str, Any]) -> float:
         if config["log_model"]:
             mlflow.pytorch.log_model(model, "model")
 
-        return trainer.callback_metrics["val_iou"].item()
+        return trainer.callback_metrics["val_BinaryJaccardIndex"].item()
 
 
 def seed_rngs(seed: int) -> None:
