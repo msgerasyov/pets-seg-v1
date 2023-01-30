@@ -23,7 +23,7 @@ from pytorch_lightning.loggers import MLFlowLogger, LightningLoggerBase
 from utils import LightningDeepLabV3, OxfordIIITPetDataModule, get_transforms
 
 
-def sample_params(trial: optuna.trial.Trial) -> Dict[str, Any]:
+def sample_configuration(trial: optuna.trial.Trial) -> Dict[str, Any]:
     lr = trial.suggest_float("lr", 1e-4, 5e-2, log=True)
     momentum = trial.suggest_float("momentum", 0.9, 0.99)
 
@@ -110,7 +110,7 @@ def update_experiment(
 
 
 def objective(trial: optuna.trial.Trial, args: argparse.Namespace) -> float:
-    model_params = sample_params(trial)
+    configuration = sample_configuration(trial)
     callbacks = [
         PyTorchLightningPruningCallback(
             trial,
@@ -127,7 +127,7 @@ def objective(trial: optuna.trial.Trial, args: argparse.Namespace) -> float:
             )
         )
     metrics = update_experiment(
-        model_params,
+        configuration,
         args.n_epochs,
         args.batch_size,
         limit_train_batches=args.limit_train_batches,
